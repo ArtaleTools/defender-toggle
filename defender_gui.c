@@ -820,7 +820,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
             /* refresh() skips repainting when the state is unchanged; the text did change */
             InvalidateRect(hwnd, NULL, TRUE);
             refresh(hwnd);
-            SetFocus(hwnd);   /* so the wheel or arrow keys can't change it by accident */
+            /* so the wheel or arrow keys can't change it by accident */
+            if (GetForegroundWindow() == hwnd) SetFocus(hwnd);
         }
         return 0;
     case WM_APP_BUILT:
