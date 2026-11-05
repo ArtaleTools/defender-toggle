@@ -16,6 +16,16 @@ if not defined ROOT (
   ping -n 31 127.0.0.1 >nul
   goto done
 )
+set "WINDRIVE="
+for %%D in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
+  if not defined WINDRIVE if exist "%%D:\Windows\DefenderToggle.target" set "WINDRIVE=%%D:"
+)
+if not defined WINDRIVE (
+  echo [ERROR] Target Windows not found. Nothing was changed.>"%ROOT%\last_result.log"
+  del /f /q "%ROOT%\action.txt"
+  goto done
+)
+del /f /q "%WINDRIVE%\Windows\DefenderToggle.target"
 set "ACTION="
 set /p ACTION=<"%ROOT%\action.txt"
 del /f /q "%ROOT%\action.txt"

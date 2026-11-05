@@ -4,6 +4,8 @@
 # Windows batch scripts run inside WinRE and must stay CRLF
 *.cmd text eol=crlf
 *.bat text eol=crlf
+# Embedded in the exe: fixed endings keep builds identical across machines
+*.ps1 text eol=crlf
 
 # Binary assets (never touch)
 *.png binary

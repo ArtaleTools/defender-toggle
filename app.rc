@@ -5,3 +5,30 @@ CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 202 RCDATA "offline\\disable_defender_offline.cmd"
 203 RCDATA "offline\\restore_defender_offline.cmd"
 204 RCDATA "offline\\build_pe.ps1"
+
+1 VERSIONINFO
+FILEVERSION 1,0,2,0
+PRODUCTVERSION 1,0,2,0
+FILEFLAGSMASK 0x3F
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "ArtaleTools"
+      VALUE "FileDescription", "defender-toggle"
+      VALUE "FileVersion", "1.0.2"
+      VALUE "InternalName", "defender-toggle"
+      VALUE "LegalCopyright", "Copyright (c) 2026 ArtaleTools. MIT License."
+      VALUE "OriginalFilename", "defender-toggle.exe"
+      VALUE "ProductName", "defender-toggle"
+      VALUE "ProductVersion", "1.0.2"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 0x04B0
+  END
+END

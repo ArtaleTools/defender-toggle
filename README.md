@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0a7bbb)
-![Language](https://img.shields.io/badge/UI-9%20languages-success)
+![Language](https://img.shields.io/badge/UI-10%20languages-success)
 ![Built with](https://img.shields.io/badge/built%20with-Zig%20(no%20CRT)-f7a41d)
 
 </div>
@@ -32,14 +32,14 @@ no clean way back. `defender-toggle` takes the opposite approach: it **leaves ev
 file in place** and simply flips Defender **off** or **on** with one click, so you
 can always restore full protection. It is a *switch*, not a *remover*.
 
-It is a ~120 KB native Win32 app with **no C runtime**, no installer, and no
+It is a ~130 KB native Win32 app with **no C runtime**, no installer, and no
 background service.
 
 ## Features
 
 - **One-click toggle** — a single window with *Disable* / *Enable* buttons.
-- **Fully reversible** — restores policies, services, scheduled tasks and the
-  tray icon to their original state.
+- **Fully reversible** — puts policies, services, scheduled tasks and the tray icon
+  back to the Windows defaults.
 - **Live status panel** — green = protected, red = fully off, amber = waiting for
   a restart / partially applied.
 - **Handles the parts Windows locks at runtime** — some Defender service settings
@@ -49,9 +49,9 @@ background service.
   straight back into Windows. A backup of your boot configuration is exported
   first.
 - **Multi-language** — opens in your Windows display language, with a menu to
-  switch at any time: English, 繁體中文, 日本語, 한국어, Español, Français, Deutsch,
-  Русский, Português. Other languages open in English; Simplified Chinese opens in
-  Traditional Chinese. Non-English/Chinese translations have not yet been reviewed
+  switch at any time: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Français, Deutsch,
+  Русский, Português. Other languages open in English.
+  Translations other than English and Traditional Chinese have not yet been reviewed
   by native speakers — corrections to `lang.h` are welcome.
 - **Tiny & self-contained** — freestanding build, single `.exe`, runs as admin
   via an embedded manifest.
@@ -67,11 +67,27 @@ Because a few service `Start` values are protected by Defender's own kernel
 callbacks while Windows is running, those are applied **offline** on the next
 reboot through a small WinRE-based boot entry the tool prepares on first use.
 
-**Enable** reverses all of the above and restores the original values.
+**Enable** reverses all of the above and returns everything to the **Windows
+defaults**. It does not remember earlier custom values, and it deletes the whole
+Defender policy key, so any Defender policies you or an organization set
+yourselves are removed too.
 
 > Microsoft locks **Tamper Protection** so that *no* program can change it.
 > You must turn it off manually first:
 > *Windows Security → Virus & threat protection → Manage settings → Tamper Protection → Off.*
+
+## Before you start
+
+- **BitLocker / device encryption:** the restart step cannot read a locked drive,
+  and booting a custom entry may trigger a recovery-key prompt. While protection is
+  on, the tool will not schedule that step. To go ahead, make sure you have your
+  recovery key, then suspend protection as administrator
+  (`manage-bde -protectors -disable C:`), and resume it when finished
+  (`manage-bde -protectors -enable C:`). This path has not been tested on an
+  encrypted PC.
+- **Work or school PCs:** don't use it on managed devices. It removes Defender
+  policies and may violate your organization's rules.
+- **x64 only.** ARM64 Windows is untested.
 
 ## Usage
 
@@ -92,10 +108,31 @@ different drive (for example if `C:` is small), set an environment variable
 setx DEFENDER_OFFLINE_DIR "D:\DefenderOffline"
 ```
 
-It must be a folder at the root of a fixed, internal NTFS drive, with an
-ASCII-only path. (On reboot the offline step runs inside WinRE, where drive
-letters can differ, so the folder is located by scanning drives — it must sit at
-a drive root.)
+It must be a folder at the root of a fixed, internal NTFS drive, at most 120
+characters, using only letters, digits, spaces and `_ - .`. Any other value is
+ignored and the default is used. (On reboot the offline step runs inside WinRE,
+where drive letters can differ, so the folder is located by scanning drives.)
+
+The folder is restricted to Administrators and SYSTEM because it holds scripts
+that run with full rights during the offline step.
+
+A folder on a different drive from Windows has only been tested with the offline
+scripts in a simulated environment, not through a real restart.
+
+## Uninstall
+
+1. Click **Enable protection** and restart if asked.
+2. In an administrator PowerShell, remove the hidden boot entries and the helper
+   folder (change the path if you set `DEFENDER_OFFLINE_DIR`):
+
+   ```powershell
+   $d = 'C:\DefenderOffline'
+   bcdedit /delete (Get-Content "$d\pe\entry-guid.txt") /f
+   bcdedit /delete (Get-Content "$d\pe\opt-guid.txt") /f
+   Remove-Item $d -Recurse -Force
+   ```
+
+3. Delete the `.exe`. Nothing else is installed.
 
 ## Building
 
@@ -107,8 +144,9 @@ Studio, no C runtime.
 pwsh -File build.ps1
 ```
 
-This produces `defender_gui.exe`. The offline helper scripts in `offline/` are
-embedded into the binary as resources at build time.
+This produces `defender_gui.exe` (published on Releases as `defender-toggle.exe`).
+The offline helper scripts in `offline/` are embedded into the binary as resources
+at build time. UI text lives in `lang.h`.
 
 ## FAQ
 
@@ -122,6 +160,9 @@ notes so you can verify the download; or build from source.
 
 **Does it work on every Windows version?** Developed and tested on Windows 11.
 Older builds are untested — the offline mechanism depends on WinRE being present.
+
+**The restart step didn't finish.** See `last_result.log` and `build.log` in the
+helper folder.
 
 **Is removal permanent?** No. That is the whole point — press *Enable* (and
 restart if asked) to get full protection back.

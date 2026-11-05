@@ -32,6 +32,8 @@
 #include <windows.h>
 #include <imm.h>
 #include <tlhelp32.h>
+#include <aclapi.h>
+#include <sddl.h>
 
 unsigned int _tls_index;  /* 不帶 C 執行期時連結器要的符號 */
 
@@ -72,14 +74,24 @@ static int g_dpi = 96;
    路徑請用 ASCII。 */
 static wchar_t g_off_dir[MAX_PATH] = L"C:\\DefenderOffline";  /* 無尾斜線 */
 
+/* The value ends up in batch files, BCD paths and command lines, so anything
+   other than a short, plain path on a fixed drive is ignored. */
 static void resolve_off_dir(void) {
     wchar_t buf[MAX_PATH];
     DWORD n = GetEnvironmentVariableW(L"DEFENDER_OFFLINE_DIR", buf, MAX_PATH);
-    if (n > 0 && n < MAX_PATH) {
-        int len = (int)n;
-        while (len > 0 && (buf[len-1] == L'\\' || buf[len-1] == L'/')) buf[--len] = 0;
-        if (len >= 3 && buf[1] == L':') lstrcpyW(g_off_dir, buf);  /* 需像 X:\... */
+    if (n == 0 || n > 120) return;
+    int len = (int)n;
+    while (len > 0 && (buf[len-1] == L'\\' || buf[len-1] == L'/')) buf[--len] = 0;
+    wchar_t d = buf[0] & ~0x20;
+    if (len < 4 || d < L'A' || d > L'Z' || buf[1] != L':' || buf[2] != L'\\') return;
+    for (int i = 3; i < len; i++) {
+        wchar_t w = buf[i];
+        int ok = (w >= L'a' && w <= L'z') || (w >= L'A' && w <= L'Z') || (w >= L'0' && w <= L'9')
+              || w == L' ' || w == L'_' || w == L'-' || w == L'.' || w == L'\\';
+        if (!ok) return;
     }
+    wchar_t rootp[4] = { buf[0], L':', L'\\', 0 };
+    if (GetDriveTypeW(rootp) == DRIVE_FIXED) lstrcpyW(g_off_dir, buf);
 }
 
 /* out = g_off_dir "\" sub  （out 需 MAX_PATH 大小） */
@@ -102,6 +114,7 @@ typedef struct {
     int tp_on;      /* 竄改防護開著 */
     int n_off;      /* Start==4 的服務數 */
     int n_def;      /* Start==出廠值 的服務數 */
+    int n_present;  /* 這台電腦實際存在的服務數（舊版 Windows 沒有 MDCoreSvc）*/
     int pending;    /* 0=無 1=重開後停用 2=重開後還原 */
     int running;    /* WinDefend 正在跑 */
     int building;   /* 正在準備開機映像 */
@@ -109,9 +122,9 @@ typedef struct {
 static State g_st;
 
 static int g_policy_fail;   /* 上一次動作的設定寫入失敗數 */
-enum { OFF_NOT_NEEDED, OFF_ARMED, OFF_MISSING, OFF_FAILED };
+enum { OFF_NOT_NEEDED, OFF_ARMED, OFF_MISSING, OFF_FAILED, OFF_BITLOCKER };
 static int g_offline;       /* 上一次動作的離線排程結果 */
-static HFONT g_titleFont, g_uiFont;
+static HFONT g_titleFont, g_uiFont, g_comboFont;
 static HWND  g_hDisable, g_hEnable, g_hTamper, g_hLang;
 static volatile LONG g_building;   /* 背景執行緒正在做映像 */
 static int g_build_disable;        /* 做完映像後要排的動作 */
@@ -160,7 +173,7 @@ static HANDLE spawn_sys32(const wchar_t *rel, const wchar_t *args) {
     memset(&si, 0, sizeof(si)); si.cb = sizeof(si);
     GetSystemDirectoryW(sys, MAX_PATH);
     wsprintfW(cmd, L"\"%s\\%s\" %s", sys, rel, args);
-    if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, sys, &si, &pi))
         return NULL;
     CloseHandle(pi.hThread);
     return pi.hProcess;
@@ -261,6 +274,58 @@ static int offline_ready(void) {
     return 1;
 }
 
+/* The folder holds scripts that later run as SYSTEM, but a new folder at a drive
+   root is writable by every signed-in user. Keep it Administrators/SYSTEM only. */
+static const wchar_t OFF_SDDL[] = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)";
+
+static int harden_dir(void) {
+    DWORD a = GetFileAttributesW(g_off_dir);
+    if (a == INVALID_FILE_ATTRIBUTES || !(a & FILE_ATTRIBUTE_DIRECTORY) || (a & FILE_ATTRIBUTE_REPARSE_POINT))
+        return 0;
+    PSECURITY_DESCRIPTOR sd = NULL;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(OFF_SDDL, SDDL_REVISION_1, &sd, NULL))
+        return 0;
+    PSID owner = NULL; PACL dacl = NULL; BOOL def = FALSE, present = FALSE;
+    GetSecurityDescriptorOwner(sd, &owner, &def);
+    GetSecurityDescriptorDacl(sd, &present, &dacl, &def);
+    DWORD r = SetNamedSecurityInfoW(g_off_dir, SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+        owner, NULL, dacl, NULL);
+    LocalFree(sd);
+    return r == ERROR_SUCCESS;
+}
+
+static int ensure_off_dir(void) {
+    PSECURITY_DESCRIPTOR sd = NULL;
+    if (ConvertStringSecurityDescriptorToSecurityDescriptorW(OFF_SDDL, SDDL_REVISION_1, &sd, NULL)) {
+        SECURITY_ATTRIBUTES sa = { sizeof(sa), sd, FALSE };
+        CreateDirectoryW(g_off_dir, &sa);
+        LocalFree(sd);
+    }
+    return harden_dir();
+}
+
+/* Empty file marking which Windows the offline step should edit: drive letters
+   change inside WinRE, and the offline folder may be on a different drive. */
+static void marker_path(wchar_t *out) {
+    GetWindowsDirectoryW(out, MAX_PATH);
+    lstrcatW(out, L"\\DefenderToggle.target");
+}
+
+/* Offline step can't read a volume locked by BitLocker, and booting a custom
+   entry may ask for the recovery key, so never schedule it while protection is on.
+   Exit code 7 is the only "on"; PowerShell or WMI errors count as "off". */
+static int bitlocker_on(void) {
+    wchar_t args[600];
+    wsprintfW(args,
+        L"-NoProfile -ExecutionPolicy Bypass -Command \"$a=@(Get-CimInstance "
+        L"-Namespace root\\cimv2\\security\\microsoftvolumeencryption -ClassName Win32_EncryptableVolume "
+        L"-ErrorAction SilentlyContinue | Where-Object { $_.ProtectionStatus -eq 1 -and "
+        L"($_.DriveLetter -eq $env:SystemDrive -or $_.DriveLetter -eq '%c:') }); "
+        L"if ($a.Count -gt 0) { exit 7 } else { exit 0 }\"", g_off_dir[0]);
+    return run_sys32(L"WindowsPowerShell\\v1.0\\powershell.exe", args) == 7;
+}
+
 /* 把內嵌的離線腳本寫到 C:\DefenderOffline（每次排程前都寫，確保跟 exe 同版）*/
 static const struct { WORD id; const wchar_t *name; } EMBED[] = {
     { 201, L"df_run.cmd" },
@@ -278,7 +343,7 @@ static int write_embedded(void) {
     for (; *rp && rl < (int)sizeof(rel) - 1; rp++) rel[rl++] = (char)*rp;
     rel[rl] = 0;
 
-    CreateDirectoryW(g_off_dir, NULL);
+    if (!ensure_off_dir()) return 0;
     for (int i = 0; i < (int)(sizeof(EMBED)/sizeof(EMBED[0])); i++) {
         HRSRC r = FindResourceW(NULL, MAKEINTRESOURCEW(EMBED[i].id), MAKEINTRESOURCEW(10) /* RT_RCDATA */);
         HGLOBAL g = r ? LoadResource(NULL, r) : NULL;
@@ -332,21 +397,28 @@ static void cancel_offline(void) {
     off_path(ap, L"action.txt");
     run_sys32(L"bcdedit.exe", L"/deletevalue {bootmgr} bootsequence");
     DeleteFileW(ap);
+    marker_path(ap);
+    DeleteFileW(ap);
 }
 
 static int arm_offline(int disable) {
-    wchar_t g[40], args[80], ap[MAX_PATH];
+    wchar_t g[40], args[80], ap[MAX_PATH], mp[MAX_PATH];
     if (!read_guid(g)) return 0;
+    marker_path(mp);
+    HANDLE mh = CreateFileW(mp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    if (mh == INVALID_HANDLE_VALUE) return 0;
+    CloseHandle(mh);
     off_path(ap, L"action.txt");
     const char *txt = disable ? "disable\r\n" : "restore\r\n";
     HANDLE h = CreateFileW(ap, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE) return 0;
+    if (h == INVALID_HANDLE_VALUE) { DeleteFileW(mp); return 0; }
     DWORD w = 0;
     BOOL ok = WriteFile(h, txt, (DWORD)lstrlenA(txt), &w, NULL);
     CloseHandle(h);
     wsprintfW(args, L"/bootsequence %s", g);
     if (!ok || run_sys32(L"bcdedit.exe", args) != 0 || !boot_armed()) {
         DeleteFileW(ap);
+        DeleteFileW(mp);
         return 0;
     }
     return 1;
@@ -355,11 +427,16 @@ static int arm_offline(int disable) {
 /* action.txt 與開機設定對不上時（上次沒跑成）清掉，只在啟動時做 */
 static void reconcile_pending(void) {
     wchar_t ap[MAX_PATH];
+    /* Folders made by older versions are still user-writable; don't trust them until fixed. */
+    if (file_exists(g_off_dir) && !harden_dir()) return;
     off_path(ap, L"action.txt");
     int has_action = file_exists(ap);
     int armed = boot_armed();
-    if (has_action && !armed) DeleteFileW(ap);
-    else if (!has_action && armed) cancel_offline();
+    if (has_action && !armed) {
+        DeleteFileW(ap);
+        marker_path(ap);
+        DeleteFileW(ap);
+    } else if (!has_action && armed) cancel_offline();
 }
 
 static int read_pending(void) {
@@ -434,6 +511,8 @@ static void apply_offline(int disable) {
         off_path(ap, L"action.txt");
         if (file_exists(ap) || boot_armed()) cancel_offline();
         g_offline = OFF_NOT_NEEDED;
+    } else if (bitlocker_on()) {
+        g_offline = OFF_BITLOCKER;
     } else if (!offline_ready()) {
         g_offline = OFF_MISSING;
     } else {
@@ -443,7 +522,7 @@ static void apply_offline(int disable) {
 
 /* 背景做映像（約幾分鐘），做完直接排離線動作，再通知視窗 */
 static DWORD WINAPI build_thread(LPVOID param) {
-    wchar_t args[400];
+    wchar_t args[800];
     wsprintfW(args,
         L"-NoProfile -ExecutionPolicy Bypass -File \"%s\\build_pe.ps1\" -Root \"%s\"",
         g_off_dir, g_off_dir);
@@ -497,11 +576,12 @@ static void read_state(void) {
     v = 0;
     g_st.tp_on = (get_dword(TP_KEY, "TamperProtection", &v) && (v & 1));   /* 5=開、4=關（0 也是關）*/
 
-    g_st.n_off = g_st.n_def = 0;
+    g_st.n_off = g_st.n_def = g_st.n_present = 0;
     for (int i = 0; i < NSVCS; i++) {
         char path[128]; DWORD s = 0;
         svc_path(path, SVCS[i].name);
         if (!get_dword(path, "Start", &s)) continue;
+        g_st.n_present++;
         if (s == 4) g_st.n_off++;
         if (s == SVCS[i].def) g_st.n_def++;
     }
@@ -510,8 +590,8 @@ static void read_state(void) {
     g_st.building = g_building != 0;
 }
 
-static int full_off(void) { return g_st.n_off == NSVCS && g_st.disabled; }
-static int full_on(void)  { return g_st.n_def == NSVCS && !g_st.disabled; }
+static int full_off(void) { return g_st.n_present && g_st.n_off == g_st.n_present && g_st.disabled; }
+static int full_on(void)  { return g_st.n_present && g_st.n_def == g_st.n_present && !g_st.disabled; }
 
 /* ---- GUI -------------------------------------------------------------- */
 
@@ -519,7 +599,7 @@ static int full_on(void)  { return g_st.n_def == NSVCS && !g_st.disabled; }
 static void refresh(HWND hwnd) {
     State prev = g_st;
     read_state();
-    if (memcmp(&prev, &g_st, sizeof(State)) == 0 && prev.n_off + prev.n_def > 0) return;
+    if (memcmp(&prev, &g_st, sizeof(State)) == 0 && prev.n_present > 0) return;
 
     EnableWindow(g_hDisable, !g_st.building && g_st.pending != 1 && !(g_st.pending == 0 && full_off()));
     EnableWindow(g_hEnable,  !g_st.building && g_st.pending != 2 && !(g_st.pending == 0 && full_on()));
@@ -570,7 +650,7 @@ static void draw_fit(HDC dc, const wchar_t *text, RECT *r, HFONT font, int px, i
     HFONT prev = (HFONT)SelectObject(dc, font), tmp = NULL;
     for (;;) {
         RECT m = {0,0,0,0};
-        DrawTextW(dc, text, -1, &m, DT_SINGLELINE | DT_CALCRECT);
+        DrawTextW(dc, text, -1, &m, DT_SINGLELINE | DT_NOPREFIX | DT_CALCRECT);
         if (m.right <= avail || px <= S(9)) break;
         int next = MulDiv(px, avail, m.right);
         px = next < px ? next : px - 1;
@@ -579,7 +659,7 @@ static void draw_fit(HDC dc, const wchar_t *text, RECT *r, HFONT font, int px, i
         if (tmp) DeleteObject(tmp);
         tmp = f;
     }
-    DrawTextW(dc, text, -1, r, DT_CENTER | DT_SINGLELINE | fmt);
+    DrawTextW(dc, text, -1, r, DT_CENTER | DT_SINGLELINE | DT_NOPREFIX | fmt);
     SelectObject(dc, prev);
     if (tmp) DeleteObject(tmp);
 }
@@ -639,9 +719,10 @@ static void finish_action(HWND hwnd, int disable) {
     const wchar_t *verb = TR(disable ? S_PHRASE_DISABLED : S_PHRASE_RESTORED);
     wchar_t msg[1100];
     refresh(hwnd);
-    if (g_offline == OFF_MISSING || g_offline == OFF_FAILED) {
+    if (g_offline == OFF_MISSING || g_offline == OFF_FAILED || g_offline == OFF_BITLOCKER) {
         wsprintfW(msg, TR(S_FMT_SVC_NOT_SCHEDULED), verb,
-            TR(g_offline == OFF_MISSING ? S_IMG_NOT_READY : S_SCHED_FAILED));
+            TR(g_offline == OFF_BITLOCKER ? S_BITLOCKER_ON :
+               g_offline == OFF_MISSING ? S_IMG_NOT_READY : S_SCHED_FAILED));
         MessageBoxW(hwnd, msg, TR(S_TITLE_DEFSWITCH), MB_ICONWARNING);
         return;
     }
@@ -687,6 +768,15 @@ static void do_action(HWND hwnd, int disable) {
     finish_action(hwnd, disable);
 }
 
+/* The menu lists every language, so its font does not follow the selection. */
+static void set_combo_font(void) {
+    HFONT old = g_comboFont;
+    g_comboFont = CreateFontW(S(15),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+    SendMessageW(g_hLang, WM_SETFONT, (WPARAM)g_comboFont, TRUE);
+    if (old) DeleteObject(old);
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
     switch (m) {
     case WM_CREATE: {
@@ -694,22 +784,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
         if (g_dpi <= 0) g_dpi = 96;
 
         g_hDisable = CreateWindowW(L"BUTTON", L"",
-            WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,
             S(30),S(160),S(170),S(44), hwnd,(HMENU)IDC_DISABLE,NULL,NULL);
         g_hEnable = CreateWindowW(L"BUTTON", L"",
-            WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,
             S(220),S(160),S(170),S(44), hwnd,(HMENU)IDC_ENABLE,NULL,NULL);
         g_hTamper = CreateWindowW(L"BUTTON", L"",
-            WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,
             S(30),S(216),S(360),S(40), hwnd,(HMENU)IDC_TAMPER,NULL,NULL);
         g_hLang = CreateWindowW(L"COMBOBOX", L"",
-            WS_CHILD|WS_VISIBLE|WS_VSCROLL|CBS_DROPDOWNLIST,
+            WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_VSCROLL|CBS_DROPDOWNLIST,
             S(300),S(6),S(112),S(280), hwnd,(HMENU)IDC_LANG,NULL,NULL);
-        /* The menu lists every language, so its font does not follow the selection. */
-        SendMessageW(g_hLang, WM_SETFONT,
-            (WPARAM)CreateFontW(S(15),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-                DEFAULT_PITCH,L"Segoe UI"),TRUE);
+        set_combo_font();
         for (int i = 0; i < NLANG; i++)
             SendMessageW(g_hLang, CB_ADDSTRING, 0, (LPARAM)LANG_NAME[i]);
         SendMessageW(g_hLang, CB_SETCURSEL, (WPARAM)g_lang, 0);
@@ -731,7 +817,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
             int sel = (int)SendMessageW(g_hLang, CB_GETCURSEL, 0, 0);
             if (sel >= 0 && sel < NLANG) g_lang = sel;
             apply_lang(hwnd);
+            /* refresh() skips repainting when the state is unchanged; the text did change */
+            InvalidateRect(hwnd, NULL, TRUE);
             refresh(hwnd);
+            SetFocus(hwnd);   /* so the wheel or arrow keys can't change it by accident */
         }
         return 0;
     case WM_APP_BUILT:
@@ -753,6 +842,20 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
             return 0;
         }
         break;
+    case WM_DPICHANGED: {
+        const RECT *r = (const RECT *)lp;
+        g_dpi = HIWORD(wp);
+        SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        MoveWindow(g_hDisable, S(30), S(160), S(170), S(44), TRUE);
+        MoveWindow(g_hEnable, S(220), S(160), S(170), S(44), TRUE);
+        MoveWindow(g_hTamper, S(30), S(216), S(360), S(40), TRUE);
+        MoveWindow(g_hLang, S(300), S(6), S(112), S(280), TRUE);
+        set_combo_font();
+        apply_lang(hwnd);
+        InvalidateRect(hwnd, NULL, TRUE);
+        return 0;
+    }
     case WM_PAINT: paint(hwnd); return 0;
     case WM_CTLCOLORBTN: return (LRESULT)GetStockObject(NULL_BRUSH);
     case WM_DESTROY: KillTimer(hwnd, 1); PostQuitMessage(0); return 0;
@@ -762,6 +865,17 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
 
 void start(void) {
     HINSTANCE hInst = GetModuleHandleW(NULL);
+
+    /* Runs elevated, often from Downloads: never load DLLs from the exe's folder. */
+    SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
+
+    /* Two copies could build the boot image at once. */
+    CreateMutexW(NULL, FALSE, L"Local\\DefenderToggleSingleInstance");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        HWND other = FindWindowW(L"DefenderToggleWnd", NULL);
+        if (other) SetForegroundWindow(other);
+        ExitProcess(0);
+    }
 
     /* 解析離線資料夾（環境變數 DEFENDER_OFFLINE_DIR，否則預設 C:\DefenderOffline）。
        必須在任何離線函式（reconcile_pending 等）之前做。 */
@@ -799,6 +913,7 @@ void start(void) {
 
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
+        if (IsDialogMessageW(hwnd, &msg)) continue;   /* Tab between controls */
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }

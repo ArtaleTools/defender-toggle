@@ -1,7 +1,9 @@
 @echo off
 rem Run inside WinRE Command Prompt. Restores 7 Defender services to their original start values.
 setlocal enabledelayedexpansion
-set "HIVE=%~d0\Windows\System32\config\SYSTEM"
+rem WINDRIVE comes from df_run.cmd; boot images made by v1.0.0/v1.0.1 don't set it
+if not defined WINDRIVE set "WINDRIVE=%~d0"
+set "HIVE=%WINDRIVE%\Windows\System32\config\SYSTEM"
 if not exist "%HIVE%" (
   echo [ERROR] Windows registry not found: %HIVE%
   pause
@@ -28,7 +30,7 @@ if errorlevel 1 (
   echo [ERROR] reg unload failed. Changes may not be saved.
   set /a BAD+=1
 )
-reg load HKLM\OFFSW "%~d0\Windows\System32\config\SOFTWARE"
+reg load HKLM\OFFSW "%WINDRIVE%\Windows\System32\config\SOFTWARE"
 if errorlevel 1 (
   echo   FAILED cannot load SOFTWARE hive
   set /a BAD+=1

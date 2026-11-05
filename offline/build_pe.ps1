@@ -7,7 +7,8 @@ $ErrorActionPreference = 'Stop'
 $pe   = Join-Path $Root 'pe'
 $log  = Join-Path $Root 'build.log'
 $tmp  = Join-Path $pe 'winre.new.wim'
-$mnt  = Join-Path $env:SystemRoot 'Temp\DefenderOfflineMount'
+# inside the protected folder: Windows\Temp lets any user pre-create this path
+$mnt  = Join-Path $Root 'mnt'
 $dism = Join-Path $env:SystemRoot 'System32\Dism.exe'
 $drv  = Split-Path -Qualifier $Root
 $rel  = $Root.Substring($drv.Length)
@@ -93,8 +94,8 @@ try {
     Move-Item -LiteralPath $tmp -Destination $wim
 
     # 4. hidden BCD entry (not added to the boot menu; used only via /bootsequence)
-    $loader = 'winload.efi'
-    if ((Run bcdedit.exe @('/enum', '{current}')) -match '(?im)^path\s+\S*\\(winload\.\w+)') { $loader = $Matches[1] }
+    # firmware_type is not localized, unlike bcdedit's text output
+    $loader = if ($env:firmware_type -eq 'Legacy') { 'winload.exe' } else { 'winload.efi' }
     $opt = NewGuid (Run bcdedit.exe @('/create', '/d', 'DefenderOffline ramdisk', '/device'))
     Run bcdedit.exe @('/set', $opt, 'ramdisksdidevice', "partition=$drv") | Out-Null
     Run bcdedit.exe @('/set', $opt, 'ramdisksdipath', "$rel\pe\boot.sdi") | Out-Null

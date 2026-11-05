@@ -1,7 +1,9 @@
 @echo off
 rem Run inside WinRE Command Prompt. Sets 7 Defender services to disabled (Start=4) offline.
 setlocal enabledelayedexpansion
-set "HIVE=%~d0\Windows\System32\config\SYSTEM"
+rem WINDRIVE comes from df_run.cmd; boot images made by v1.0.0/v1.0.1 don't set it
+if not defined WINDRIVE set "WINDRIVE=%~d0"
+set "HIVE=%WINDRIVE%\Windows\System32\config\SYSTEM"
 if not exist "%HIVE%" (
   echo [ERROR] Windows registry not found: %HIVE%
   pause
