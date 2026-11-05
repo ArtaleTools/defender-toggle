@@ -1,0 +1,13 @@
+# Normalize line endings in the repo to LF by default
+* text=auto
+
+# Windows batch scripts run inside WinRE and must stay CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets (never touch)
+*.png binary
+*.ico binary
+*.res binary
+*.exe binary
+*.pdb binary

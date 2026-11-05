@@ -1,0 +1,17 @@
+# build artifacts
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.res
+
+# stray / editor / scratch
+-o
+*.bak
+*.old
+*.log
+test*.ps1
+.vscode/
+
+# generated offline runtime data (created on the user's own machine)
+/DefenderOffline/

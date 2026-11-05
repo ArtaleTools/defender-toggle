@@ -1,0 +1,7 @@
+#include <windows.h>
+1 ICON "app.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+201 RCDATA "offline\\df_run.cmd"
+202 RCDATA "offline\\disable_defender_offline.cmd"
+203 RCDATA "offline\\restore_defender_offline.cmd"
+204 RCDATA "offline\\build_pe.ps1"
