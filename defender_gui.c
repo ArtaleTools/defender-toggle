@@ -94,114 +94,7 @@ static void off_path(wchar_t *out, const wchar_t *sub) {
 #define IDC_TAMPER  1003
 #define IDC_LANG    1004
 
-/* ---- 語言 -------------------------------------------------------------- */
-#define NLANG 2
-#define L_EN 0
-#define L_ZH 1
-static int g_lang;
-#define TR(a) ((a)[g_lang])
-
-static const wchar_t *const S_WINTITLE[NLANG] = { L"Defender Toggle", L"Defender 一鍵切換" };
-static const wchar_t *const S_BTN_DISABLE[NLANG] = { L"Disable protection", L"關閉防護" };
-static const wchar_t *const S_BTN_ENABLE[NLANG]  = { L"Enable protection", L"開啟防護" };
-static const wchar_t *const S_BTN_TAMPER_ON[NLANG] = {
-    L"Disable Tamper Protection (open settings)", L"關閉竄改防護（開啟設定頁）" };
-static const wchar_t *const S_BTN_TAMPER_OFF[NLANG] = {
-    L"Tamper Protection is off \u2713", L"竄改防護已關閉 \u2713" };
-static const wchar_t *const S_BTN_LANG[NLANG] = { L"\u4e2d\u6587", L"English" };
-
-static const wchar_t *const S_TAMPER_ALREADY_OFF[NLANG] = {
-    L"Tamper Protection is already off.", L"竄改防護已經是關閉狀態。" };
-static const wchar_t *const S_TITLE_TAMPER[NLANG] = { L"Tamper Protection", L"竄改防護" };
-static const wchar_t *const S_TITLE_DEFSWITCH[NLANG] = { L"Defender toggle", L"Defender 切換" };
-static const wchar_t *const S_TAMPER_OPENED[NLANG] = {
-    L"Opened the \"Virus & threat protection settings\" page.\n\n"
-    L"Please turn off \"Tamper Protection\",\n"
-    L"then come back to this window and click \"Disable/Enable protection\" again.\n\n"
-    L"Note: Tamper Protection is locked by Microsoft; no program can turn it off "
-    L"automatically. It can only be toggled manually on that page.",
-    L"已開啟「病毒與威脅防護設定」頁。\n\n"
-    L"請把「竄改保護 (Tamper Protection)」切為關閉，\n"
-    L"再回到本視窗按「開啟/關閉防護」。\n\n"
-    L"註：竄改防護是微軟鎖定的開關，任何程式都無法自動關閉，\n"
-    L"只能在這個頁面手動撥動。" };
-
-static const wchar_t *const S_BUILDING_TITLE[NLANG] = { L"Preparing boot image", L"正在準備開機映像" };
-static const wchar_t *const S_BUILDING_SUB[NLANG] = {
-    L"First-time setup, takes a few minutes, please don't close this window",
-    L"第一次使用，約需幾分鐘，請不要關閉視窗" };
-static const wchar_t *const S_PEND_DISABLE_TITLE[NLANG] = { L"Will fully disable after restart", L"重開後徹底關閉" };
-static const wchar_t *const S_PEND_RESTORE_TITLE[NLANG] = { L"Will restore after restart", L"重開後恢復防護" };
-static const wchar_t *const S_PEND_SUB[NLANG] = {
-    L"Scheduled; it will finish automatically on restart, nothing else to do",
-    L"已排好，重開時自動完成，不用按任何東西" };
-static const wchar_t *const S_FULLOFF_TITLE[NLANG] = { L"Defender is fully disabled", L"Defender 已徹底關閉" };
-static const wchar_t *const S_FULLOFF_SUB_PENDING[NLANG] = {
-    L"Settings are ready; restart to actually stop it",
-    L"設定已改好，重開才會真的停止" };
-static const wchar_t *const S_FULLOFF_SUB_DONE[NLANG] = {
-    L"Real-time protection, services, tasks and tray icon are all disabled",
-    L"即時防護、服務、排程與小圖示皆已停用" };
-static const wchar_t *const S_RUNNING_TITLE[NLANG] = { L"Defender is running", L"Defender 運作中" };
-static const wchar_t *const S_RUNNING_SUB[NLANG] = { L"Real-time protection is normal", L"即時防護正常" };
-static const wchar_t *const S_FULLON_SUB_PENDING[NLANG] = {
-    L"Settings restored; restart to actually enable it",
-    L"設定已還原，重開才會真的啟動" };
-static const wchar_t *const S_PARTIAL_TITLE[NLANG] = { L"Defender is partially disabled", L"Defender 部分關閉" };
-static const wchar_t *const S_PARTIAL_SUB_RUNNING[NLANG] = {
-    L"Real-time protection may be off, but services are still running",
-    L"即時防護可能已關，但服務還在跑" };
-static const wchar_t *const S_PARTIAL_SUB_OTHER[NLANG] = {
-    L"Some service settings are inconsistent, you can click the button again",
-    L"有服務設定不一致，可再按一次按鈕" };
-static const wchar_t *const S_TAMPER_WARN[NLANG] = {
-    L"\u26a0 Tamper Protection is on, please turn it off manually first",
-    L"\u26a0 竄改防護開啟中，請先手動關閉再操作" };
-
-static const wchar_t *const S_VERB_DISABLE[NLANG] = { L"disabled", L"關閉" };
-static const wchar_t *const S_VERB_ENABLE[NLANG]  = { L"restored", L"恢復" };
-static const wchar_t *const S_FMT_SVC_NOT_SCHEDULED[NLANG] = {
-    L"Real-time protection %s, but services were not scheduled: %s\n\nServices remain unchanged.",
-    L"即時防護已%s，但服務沒有排好：%s\n\n目前服務維持原狀。" };
-static const wchar_t *const S_IMG_NOT_READY[NLANG] = {
-    L"the boot image isn't ready yet.", L"開機映像還沒準備好。" };
-static const wchar_t *const S_SCHED_FAILED[NLANG] = {
-    L"failed to schedule for next boot.", L"排定下次開機失敗。" };
-static const wchar_t *const S_FMT_DONE_NOREBOOT[NLANG] = {
-    L"%s complete, no restart needed.", L"%s完成，不用重開。" };
-static const wchar_t *const S_FMT_REBOOT_ASK[NLANG] = {
-    L"Real-time protection %s, %s\n\nRestart now? Choose \"No\" to apply it on your next restart.",
-    L"即時防護已%s，%s\n\n要現在重開嗎？選「否」就等你下次重開才生效。" };
-static const wchar_t *const S_REST_ARMED[NLANG] = {
-    L"the rest is scheduled.\nIt will finish automatically on restart (an extra restart), nothing else to do.",
-    L"其餘設定已排好。\n重開時會自動完成（會多重開一次），不用按任何東西。" };
-static const wchar_t *const S_REST_DONE[NLANG] = {
-    L"the rest has also been changed; one restart will apply it.",
-    L"其餘設定也已改好，重開一次就生效。" };
-static const wchar_t *const S_FMT_WRITE_FAIL[NLANG] = {
-    L"%d setting(s) failed to write (Tamper Protection may be on).\n\n"
-    L"Go to Windows Security > Virus & threat protection > Manage settings, "
-    L"turn off Tamper Protection, then try again.",
-    L"有 %d 項設定寫入失敗（可能是竄改防護開啟中）。\n\n"
-    L"請到 Windows 安全性 > 病毒與威脅防護 > 管理設定，"
-    L"關閉竄改保護後再試。" };
-static const wchar_t *const S_ASK_BUILD_IMAGE[NLANG] = {
-    L"First-time setup: a boot image needs to be prepared first:\n"
-    L"a copy of this PC's built-in recovery system will be made and configured,\n"
-    L"takes about 3-5 minutes and uses about 1GB (%s).\n\n"
-    L"Prepare it now?",
-    L"第一次使用，要先準備重開時用的開機映像：\n"
-    L"從這台電腦內建的修復系統複製一份並改好，\n"
-    L"約需 3～5 分鐘，會占用約 1GB（%s）。\n\n"
-    L"要現在準備嗎？" };
-static const wchar_t *const S_BUILD_FAILED[NLANG] = {
-    L"Failed to prepare the boot image, services remain unchanged.\n\n"
-    L"Details in %s\\build.log.",
-    L"開機映像準備失敗，服務維持原狀。\n\n"
-    L"詳細原因在 %s\\build.log。" };
-static const wchar_t *const S_BUILDING_CLOSE_WARN[NLANG] = {
-    L"Preparing the boot image, please don't close before it finishes.",
-    L"正在準備開機映像，完成前請不要關閉。" };
+#include "lang.h"
 
 /* ---- state ------------------------------------------------------------ */
 typedef struct {
@@ -635,12 +528,25 @@ static void refresh(HWND hwnd) {
 }
 
 /* 設定視窗標題與各按鈕文字成目前語言；WM_CREATE 與切換語言時都呼叫 */
+static HFONT make_font(int px, int weight) {
+    return CreateFontW(px,0,0,0,weight,0,0,0,DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
+        DEFAULT_PITCH,LANG_FACE[g_lang]);
+}
+
 static void apply_lang(HWND hwnd) {
+    HFONT oldTitle = g_titleFont, oldUi = g_uiFont;
+    g_titleFont = make_font(S(34), FW_BOLD);
+    g_uiFont = make_font(S(17), FW_NORMAL);
+    SendMessageW(g_hDisable, WM_SETFONT,(WPARAM)g_uiFont,TRUE);
+    SendMessageW(g_hEnable,  WM_SETFONT,(WPARAM)g_uiFont,TRUE);
+    SendMessageW(g_hTamper,  WM_SETFONT,(WPARAM)g_uiFont,TRUE);
+    if (oldTitle) DeleteObject(oldTitle);
+    if (oldUi) DeleteObject(oldUi);
     SetWindowTextW(hwnd, TR(S_WINTITLE));
     SetWindowTextW(g_hDisable, TR(S_BTN_DISABLE));
     SetWindowTextW(g_hEnable, TR(S_BTN_ENABLE));
     SetWindowTextW(g_hTamper, g_st.tp_on ? TR(S_BTN_TAMPER_ON) : TR(S_BTN_TAMPER_OFF));
-    SetWindowTextW(g_hLang, TR(S_BTN_LANG));
 }
 
 static void open_tamper(HWND hwnd) {
@@ -656,6 +562,26 @@ static void open_tamper(HWND hwnd) {
     if (se) se(NULL, L"open", L"windowsdefender://threatsettings", NULL, NULL, SW_SHOWNORMAL);
     MessageBoxW(hwnd, TR(S_TAMPER_OPENED), TR(S_TITLE_TAMPER), MB_ICONINFORMATION);
     refresh(hwnd);
+}
+
+/* Draws one centered line, shrinking the font only when it would not fit. */
+static void draw_fit(HDC dc, const wchar_t *text, RECT *r, HFONT font, int px, int weight, UINT fmt) {
+    int avail = r->right - r->left - S(16);
+    HFONT prev = (HFONT)SelectObject(dc, font), tmp = NULL;
+    for (;;) {
+        RECT m = {0,0,0,0};
+        DrawTextW(dc, text, -1, &m, DT_SINGLELINE | DT_CALCRECT);
+        if (m.right <= avail || px <= S(9)) break;
+        int next = MulDiv(px, avail, m.right);
+        px = next < px ? next : px - 1;
+        HFONT f = make_font(px, weight);
+        SelectObject(dc, f);
+        if (tmp) DeleteObject(tmp);
+        tmp = f;
+    }
+    DrawTextW(dc, text, -1, r, DT_CENTER | DT_SINGLELINE | fmt);
+    SelectObject(dc, prev);
+    if (tmp) DeleteObject(tmp);
 }
 
 static void paint(HWND hwnd) {
@@ -693,32 +619,25 @@ static void paint(HWND hwnd) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(255,255,255));
 
-    /* title */
-    RECT t = rc; t.top = S(26); t.bottom = S(90);
-    HFONT old = (HFONT)SelectObject(dc, g_titleFont);
-    DrawTextW(dc, title, -1, &t, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-    SelectObject(dc, old);
+    RECT t = rc; t.top = S(36); t.bottom = S(90);
+    draw_fit(dc, title, &t, g_titleFont, S(34), FW_BOLD, DT_VCENTER);
 
-    /* sub line */
-    old = (HFONT)SelectObject(dc, g_uiFont);
-    RECT s = rc; s.top = S(92); s.bottom = S(118);
-    DrawTextW(dc, sub, -1, &s, DT_CENTER | DT_SINGLELINE);
+    RECT sl = rc; sl.top = S(92); sl.bottom = S(118);
+    draw_fit(dc, sub, &sl, g_uiFont, S(17), FW_NORMAL, 0);
 
-    /* tamper warning */
     if (g_st.tp_on) {
         SetTextColor(dc, RGB(255,235,140));
         RECT w = rc; w.top = S(120); w.bottom = S(150);
-        DrawTextW(dc, TR(S_TAMPER_WARN), -1, &w, DT_CENTER | DT_SINGLELINE);
+        draw_fit(dc, TR(S_TAMPER_WARN), &w, g_uiFont, S(17), FW_NORMAL, 0);
     }
-    SelectObject(dc, old);
 
     EndPaint(hwnd, &ps);
 }
 
 /* 動作（含做映像）完成後的提示 */
 static void finish_action(HWND hwnd, int disable) {
-    const wchar_t *verb = TR(disable ? S_VERB_DISABLE : S_VERB_ENABLE);
-    wchar_t msg[700];
+    const wchar_t *verb = TR(disable ? S_PHRASE_DISABLED : S_PHRASE_RESTORED);
+    wchar_t msg[1100];
     refresh(hwnd);
     if (g_offline == OFF_MISSING || g_offline == OFF_FAILED) {
         wsprintfW(msg, TR(S_FMT_SVC_NOT_SCHEDULED), verb,
@@ -747,14 +666,14 @@ static void do_action(HWND hwnd, int disable) {
 
     if (g_policy_fail) {
         /* 設定寫入失敗才真的可能是竄改防護 */
-        wchar_t msg[300];
+        wchar_t msg[1100];
         wsprintfW(msg, TR(S_FMT_WRITE_FAIL), g_policy_fail);
         if (g_offline == OFF_ARMED) cancel_offline();
         refresh(hwnd);
         MessageBoxW(hwnd, msg, TR(S_TITLE_DEFSWITCH), MB_ICONWARNING);
         return;
     }
-    wchar_t ask_msg[600];
+    wchar_t ask_msg[1100];
     wsprintfW(ask_msg, TR(S_ASK_BUILD_IMAGE), g_off_dir);
     if (g_offline == OFF_MISSING &&
         MessageBoxW(hwnd, ask_msg,
@@ -774,29 +693,26 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
         g_dpi = (int)GetDpiForWindow(hwnd);
         if (g_dpi <= 0) g_dpi = 96;
 
-        g_titleFont = CreateFontW(S(34),0,0,0,FW_BOLD,0,0,0,DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-            DEFAULT_PITCH,L"Microsoft JhengHei UI");
-        g_uiFont = CreateFontW(S(17),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
-            DEFAULT_PITCH,L"Microsoft JhengHei UI");
-
         g_hDisable = CreateWindowW(L"BUTTON", L"",
             WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
-            S(40),S(160),S(150),S(44), hwnd,(HMENU)IDC_DISABLE,NULL,NULL);
+            S(30),S(160),S(170),S(44), hwnd,(HMENU)IDC_DISABLE,NULL,NULL);
         g_hEnable = CreateWindowW(L"BUTTON", L"",
             WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
-            S(230),S(160),S(150),S(44), hwnd,(HMENU)IDC_ENABLE,NULL,NULL);
+            S(220),S(160),S(170),S(44), hwnd,(HMENU)IDC_ENABLE,NULL,NULL);
         g_hTamper = CreateWindowW(L"BUTTON", L"",
             WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
-            S(40),S(216),S(340),S(40), hwnd,(HMENU)IDC_TAMPER,NULL,NULL);
-        g_hLang = CreateWindowW(L"BUTTON", L"",
-            WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,
-            S(330),S(8),S(60),S(24), hwnd,(HMENU)IDC_LANG,NULL,NULL);
-        SendMessageW(g_hDisable, WM_SETFONT,(WPARAM)g_uiFont,TRUE);
-        SendMessageW(g_hEnable,  WM_SETFONT,(WPARAM)g_uiFont,TRUE);
-        SendMessageW(g_hTamper,  WM_SETFONT,(WPARAM)g_uiFont,TRUE);
-        SendMessageW(g_hLang,    WM_SETFONT,(WPARAM)g_uiFont,TRUE);
+            S(30),S(216),S(360),S(40), hwnd,(HMENU)IDC_TAMPER,NULL,NULL);
+        g_hLang = CreateWindowW(L"COMBOBOX", L"",
+            WS_CHILD|WS_VISIBLE|WS_VSCROLL|CBS_DROPDOWNLIST,
+            S(300),S(6),S(112),S(280), hwnd,(HMENU)IDC_LANG,NULL,NULL);
+        /* The menu lists every language, so its font does not follow the selection. */
+        SendMessageW(g_hLang, WM_SETFONT,
+            (WPARAM)CreateFontW(S(15),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
+                DEFAULT_PITCH,L"Segoe UI"),TRUE);
+        for (int i = 0; i < NLANG; i++)
+            SendMessageW(g_hLang, CB_ADDSTRING, 0, (LPARAM)LANG_NAME[i]);
+        SendMessageW(g_hLang, CB_SETCURSEL, (WPARAM)g_lang, 0);
         apply_lang(hwnd);
         reconcile_pending();
         /* 即時偵測狀態變化；允許系統把喚醒合併，最小化時不查 */
@@ -811,17 +727,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT m, WPARAM wp, LPARAM lp) {
         if (LOWORD(wp) == IDC_DISABLE) do_action(hwnd, 1);
         else if (LOWORD(wp) == IDC_ENABLE) do_action(hwnd, 0);
         else if (LOWORD(wp) == IDC_TAMPER) open_tamper(hwnd);
-        else if (LOWORD(wp) == IDC_LANG) {
-            g_lang = g_lang ? L_EN : L_ZH;
+        else if (LOWORD(wp) == IDC_LANG && HIWORD(wp) == CBN_SELCHANGE) {
+            int sel = (int)SendMessageW(g_hLang, CB_GETCURSEL, 0, 0);
+            if (sel >= 0 && sel < NLANG) g_lang = sel;
             apply_lang(hwnd);
-            InvalidateRect(hwnd, NULL, TRUE);
+            refresh(hwnd);
         }
         return 0;
     case WM_APP_BUILT:
         refresh(hwnd);
         if (!wp) {
             {
-                wchar_t fm[300];
+                wchar_t fm[1100];
                 wsprintfW(fm, TR(S_BUILD_FAILED), g_off_dir);
                 MessageBoxW(hwnd, fm, TR(S_TITLE_DEFSWITCH), MB_ICONWARNING);
             }
@@ -850,9 +767,8 @@ void start(void) {
        必須在任何離線函式（reconcile_pending 等）之前做。 */
     resolve_off_dir();
 
-    /* 開機自動偵測語言：系統 UI 語言主語言碼是中文就用繁中，否則英文 */
-    LANGID uilang = GetUserDefaultUILanguage();
-    g_lang = (PRIMARYLANGID(uilang) == LANG_CHINESE) ? L_ZH : L_EN;
+    /* 依 Windows 顯示語言選介面語言 */
+    g_lang = lang_from_langid(GetUserDefaultUILanguage());
 
     /* 視窗沒有文字輸入；關掉輸入法就不會載入 TSF 那一串 DLL */
     ImmDisableIME((DWORD)-1);

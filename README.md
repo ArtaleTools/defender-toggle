@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0a7bbb)
-![Language](https://img.shields.io/badge/UI-English%20%7C%20繁體中文-success)
+![Language](https://img.shields.io/badge/UI-9%20languages-success)
 ![Built with](https://img.shields.io/badge/built%20with-Zig%20(no%20CRT)-f7a41d)
 
 </div>
@@ -17,6 +17,11 @@
 > This tool disables your antivirus. Turning Microsoft Defender off lowers your
 > system's protection. Use it only on machines you control and understand the
 > risk for. Everything it does is reversible — but **use at your own risk**.
+
+<p align="center">
+  <img src="assets/screenshot-en.png" width="400" alt="defender-toggle window in English">
+  <img src="assets/screenshot-zh.png" width="400" alt="defender-toggle window in Traditional Chinese">
+</p>
 
 ---
 
@@ -27,7 +32,7 @@ no clean way back. `defender-toggle` takes the opposite approach: it **leaves ev
 file in place** and simply flips Defender **off** or **on** with one click, so you
 can always restore full protection. It is a *switch*, not a *remover*.
 
-It is a ~90 KB native Win32 app with **no C runtime**, no installer, and no
+It is a ~120 KB native Win32 app with **no C runtime**, no installer, and no
 background service.
 
 ## Features
@@ -43,8 +48,11 @@ background service.
   boot entry) that applies them on the next restart, automatically, then boots
   straight back into Windows. A backup of your boot configuration is exported
   first.
-- **Multi-language** — auto-detects the system language (English / 繁體中文) and
-  includes a manual language switch.
+- **Multi-language** — opens in your Windows display language, with a menu to
+  switch at any time: English, 繁體中文, 日本語, 한국어, Español, Français, Deutsch,
+  Русский, Português. Other languages open in English; Simplified Chinese opens in
+  Traditional Chinese. Non-English/Chinese translations have not yet been reviewed
+  by native speakers — corrections to `lang.h` are welcome.
 - **Tiny & self-contained** — freestanding build, single `.exe`, runs as admin
   via an embedded manifest.
 
@@ -67,7 +75,7 @@ reboot through a small WinRE-based boot entry the tool prepares on first use.
 
 ## Usage
 
-1. Download the latest `defender_gui.exe` from [Releases](../../releases), or build
+1. Download the latest `defender-toggle.exe` from [Releases](../../releases), or build
    it yourself (see below).
 2. Turn **Tamper Protection** off (see note above).
 3. Run it (it will prompt for administrator rights).
